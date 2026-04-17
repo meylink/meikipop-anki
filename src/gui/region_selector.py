@@ -22,6 +22,7 @@ class RegionSelector(QDialog):
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
         # Points for drawing the overlay (in Qt's logical coordinates)
@@ -38,6 +39,21 @@ class RegionSelector(QDialog):
         self.update_timer.setInterval(16)
         self.update_timer.timeout.connect(self.update_selection_rect)
         self.update_timer.start()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Ensure Esc reaches this dialog reliably on Linux/Wayland/X11.
+        self.activateWindow()
+        self.raise_()
+        self.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+        self.grabKeyboard()
+
+    def closeEvent(self, event):
+        try:
+            self.releaseKeyboard()
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -59,6 +75,17 @@ class RegionSelector(QDialog):
             painter.drawRect(border_rect)
 
     def mousePressEvent(self, event: QMouseEvent):
+        logger.debug("RegionSelector: mousePressEvent")
+        if event.button() == Qt.MouseButton.RightButton:
+            if self.update_timer.isActive():
+                self.update_timer.stop()
+            self.selection_rect = None
+            self.reject()
+            return
+
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+
         self.begin_logical = QCursor.pos()
         if not self.begin_logical:  # when user selects upper left corner aka (0,0) aka None, the paint method won't work
             self.begin_logical = QPoint(1, 1)
@@ -74,7 +101,10 @@ class RegionSelector(QDialog):
     def update_selection_rect(self):
         mouse_pos = QCursor.pos()
         if not self.has_selection_started:
-            self.setGeometry(self.get_current_screen(mouse_pos).geometry())
+            # Keep the window covering the screen where the mouse is
+            current_screen = self.get_current_screen(mouse_pos)
+            if current_screen and current_screen.geometry() != self.geometry():
+                 self.setGeometry(current_screen.geometry())
             self.update()
             return
 
@@ -82,6 +112,10 @@ class RegionSelector(QDialog):
         self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
+        logger.debug("RegionSelector: mouseReleaseEvent")
+        if event.button() != Qt.MouseButton.LeftButton or not self.has_selection_started:
+            return
+
         self.update_timer.stop()
 
         # Get the final physical position
@@ -110,6 +144,9 @@ class RegionSelector(QDialog):
     def get_region():
         logger.info("Awaiting region selection... you can change the scan region in the tray")
         selector = RegionSelector()
+        selector.show()
+        selector.activateWindow()
+        selector.raise_()
         if selector.exec() == QDialog.DialogCode.Accepted:
             return selector.selection_rect
         return None

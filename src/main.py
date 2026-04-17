@@ -41,6 +41,10 @@ class SharedState:
         # screen lock - used by screen manager and popup
         self.screen_lock = threading.RLock()
         
+        # Track when popup is locked on a result to prevent hit scans and new lookups
+        self.popup_locked_on_result = False
+        self.popup_locked_lookup_string = None  # The lookup string we're locked on
+        
 def main():
     setup_logging()
     shared_state = SharedState()
@@ -49,12 +53,14 @@ def main():
     original_handler = qInstallMessageHandler(qt_message_handler)
 
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    app.setApplicationDisplayName(APP_NAME)
+    app.setDesktopFileName("meikipop")
     app.setQuitOnLastWindowClosed(False)
 
     input_loop = InputLoop(shared_state)
-    popup_window = Popup(shared_state, input_loop)
-
-    screen_manager = ScreenManager(shared_state)  # trigger region selection
+    screen_manager = ScreenManager(shared_state, input_loop)  # trigger region selection
+    popup_window = Popup(shared_state, input_loop, screen_manager)
     lookup = Lookup(shared_state, popup_window)  # load dictionary
 
     ocr_processor = OcrProcessor(shared_state)

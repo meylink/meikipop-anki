@@ -3,22 +3,33 @@ import logging
 import threading
 import time
 
-import mss
 from PIL import Image
 
-from src.config.config import config
+from src.config.config import IS_WAYLAND, config
 from src.gui.region_selector import RegionSelector
 
 logger = logging.getLogger(__name__) # Get the logger
 
+if IS_WAYLAND:
+    try:
+        from . import wayland_mss_shim
+        mss = wayland_mss_shim.MSSModuleShim()
+    except Exception as e:
+        logger.exception("Failed to initialize Wayland screenshot backend; falling back to mss")
+        import mss
+else:
+    import mss
+
 # todo doesnt work when monitors change
 class ScreenManager(threading.Thread):
-    def __init__(self, shared_state):
+    def __init__(self, shared_state, input_loop=None):
         super().__init__(daemon=True, name="ScreenManager")
         self.shared_state = shared_state
+        self.input_loop = input_loop
         self.monitor = None
         self.last_ocr_put_time = 0.0
         self.last_screenshot = None
+        self.last_mouse_pos = None
         if config.scan_region == "region":
             self.set_scan_region()
         else:
@@ -49,6 +60,14 @@ class ScreenManager(threading.Thread):
                     self._sleep_and_handle_loop_exit(config.auto_scan_interval_seconds - seconds_since_last_ocr)
                     continue
 
+                # Pause auto scanning if mouse hasn't moved (optional mode).
+                if (config.auto_scan_mode and getattr(config, 'auto_scan_on_mouse_move', False)
+                        and self.input_loop is not None):
+                    current_mouse_pos = self.input_loop.get_mouse_pos()
+                    if self.last_mouse_pos == current_mouse_pos:
+                        continue
+                    self.last_mouse_pos = current_mouse_pos
+
                 logger.debug("screenmanager acquiring lock...")
                 with self.shared_state.screen_lock:
                     logger.debug("...successfully acquired lock by screenmanager")
@@ -64,6 +83,8 @@ class ScreenManager(threading.Thread):
                     continue
 
                 self.last_screenshot = screenshot
+                if self.input_loop is not None:
+                    self.last_mouse_pos = self.input_loop.get_mouse_pos()
                 img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
                 self.shared_state.ocr_queue.put(img)
                 self.last_ocr_put_time = time.perf_counter()
@@ -76,6 +97,12 @@ class ScreenManager(threading.Thread):
         with mss.mss() as sct:
             sct_img = sct.grab(self.monitor)
             return sct_img
+
+    def take_full_screenshot(self):
+        with mss.mss() as sct:
+            full_monitor = sct.monitors[0]
+            sct_img = sct.grab(full_monitor)
+            return sct_img, full_monitor
 
     def set_scan_region(self):
         scan_rect = RegionSelector.get_region()

@@ -124,5 +124,8 @@ class OcrProcessor(threading.Thread):
                             logger.debug(f" -> Discovered provider: '{obj_class.NAME}'")
 
                 except ImportError as e:
-                    logger.warning(f"Could not import or inspect provider '{provider_name}': {e}")
+                    logger.warning(
+                        f"Skipping optional OCR provider '{provider_name}' due to missing dependency: {e}. "
+                        f"Other available providers will continue to work."
+                    )
         return providers

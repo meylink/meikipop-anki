@@ -5,9 +5,6 @@ from typing import List, Optional
 import numpy as np
 from PIL import Image
 
-# Import the MeikiOCR library
-from meikiocr import MeikiOCR
-
 # Import the "contract" classes from your application's interface
 from src.ocr.interface import BoundingBox, OcrProvider, Paragraph, Word
 
@@ -36,11 +33,13 @@ class MeikiOcrProvider(OcrProvider):
         logger.info(f"initializing {self.NAME} provider...")
         self.ocr_client = None
         try:
+            # Import lazily so provider discovery does not fail/stall if onnxruntime is missing.
+            from meikiocr import MeikiOCR
             self.ocr_client = MeikiOCR()
             logger.info(f"{self.NAME} initialized successfully, running on: {self.ocr_client.active_provider}")
 
         except Exception as e:
-            logger.error(f"failed to initialize {self.NAME}: {e}", exc_info=True)
+            logger.error(f"failed to initialize {self.NAME}: {e}")
 
     def scan(self, image: Image.Image) -> Optional[List[Paragraph]]:
         """

@@ -20,8 +20,9 @@ def get_resource_path(relative_path):
         base_path = os.path.abspath(".")
 
     full_path = os.path.join(base_path, relative_path)
+
     # Optional: Uncomment for debugging
-    # print(f"[DEBUG] Resolved resource path: {full_path}")
+    # logger.debug(f"Resolved resource path: {full_path}")
     return full_path
 
 
@@ -35,7 +36,7 @@ class TrayIcon(QSystemTrayIcon):
             self.icon = QIcon(icon_path)
             self.icon_inactive = QIcon(icon_inactive_path)
         else:
-            # print(f"Warning: Custom icon not found at '{icon_path}'. Using default.")
+            # logger.warning(f"Custom icon not found at '{icon_path}'. Using default.")
             from PyQt6.QtWidgets import QStyle
             self.icon = QIcon(QApplication.style().standardIcon(
                 QStyle.StandardPixmap.SP_ComputerIcon

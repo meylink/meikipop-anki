@@ -19,4 +19,6 @@ build/
 # Local project/user files
 data/
 config.ini
-jmdict_enhanced.pkl
+
+# Yomitan API
+src/yomitan-api/

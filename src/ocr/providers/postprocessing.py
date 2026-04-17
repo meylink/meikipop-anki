@@ -165,27 +165,57 @@ def group_lines_into_paragraphs(lines: List[Paragraph]) -> List[Paragraph]:
     vertical_lines = [p for p in main_lines if p.is_vertical]
     horizontal_lines = [p for p in main_lines if not p.is_vertical]
 
-    processed_paragraphs = []
+    processed_paragraphs: List[Paragraph] = []
 
-    for line_set in [vertical_lines, horizontal_lines]:
-        while line_set:
-            current_group = [line_set.pop(0)]
-            i = 0
-            while i < len(line_set):
-                line_to_check = line_set[i]
-                is_adjacent_to_group = any(
-                    _are_lines_adjacent(grouped_line, line_to_check) for grouped_line in current_group)
+    def process_lines(lines_subset: List[Paragraph]):
+        """
+        Groups a subset of lines (either all vertical or all horizontal)
+        using a graph-based connected components approach (BFS).
+        Complexity: O(N^2) to build graph, O(N) to traverse.
+        """
+        n = len(lines_subset)
+        if n == 0:
+            return
 
-                if is_adjacent_to_group:
-                    current_group.append(line_set.pop(i))
-                    # Restart check from the beginning since the group has grown
-                    i = 0
-                else:
-                    i += 1
+        # 1. Build Adjacency Graph (Adjacency List)
+        # adj[i] = [list of indices j that are adjacent to i]
+        adj = [[] for _ in range(n)]
 
-            merged_para = _merge_lines_into_paragraph(current_group)
-            if merged_para:
-                processed_paragraphs.append(merged_para)
+        # O(N^2) comparison to find all adjacent pairs
+        # This is acceptable for N <= 500 roughly.
+        for i in range(n):
+            for j in range(i + 1, n):
+                if _are_lines_adjacent(lines_subset[i], lines_subset[j]):
+                    adj[i].append(j)
+                    adj[j].append(i)
+
+        # 2. Find Connected Components via BFS
+        visited = [False] * n
+        for i in range(n):
+            if not visited[i]:
+                # Start a new component
+                component_indices = []
+                queue = [i]
+                visited[i] = True
+                
+                while queue:
+                    u = queue.pop(0)
+                    component_indices.append(u)
+                    
+                    for v in adj[u]:
+                        if not visited[v]:
+                            visited[v] = True
+                            queue.append(v)
+                
+                # 3. Merge this component into a single paragraph
+                component_lines = [lines_subset[idx] for idx in component_indices]
+                merged_para = _merge_lines_into_paragraph(component_lines)
+                if merged_para:
+                    processed_paragraphs.append(merged_para)
+
+    # Process vertical and horizontal lines separately
+    process_lines(vertical_lines)
+    process_lines(horizontal_lines)
 
     # Add the isolated furigana lines back as their own separate paragraphs
     final_paragraphs = processed_paragraphs + furigana_lines
