@@ -77,8 +77,7 @@ class Config:
                 'max_width': '500',
                 'max_height': '400',
                 'show_keyboard_shortcuts': 'false',
-                'prevent_background_scroll': 'false',
-                'use_raw_yomitan_overlay': 'false'
+                'prevent_background_scroll': 'false'
             },
             'Anki': {
                 'deck_name': 'Default',
@@ -151,7 +150,6 @@ class Config:
         self.max_height = config.getint('Theme', 'max_height', fallback=400)
         self.show_keyboard_shortcuts = config.getboolean('Theme', 'show_keyboard_shortcuts', fallback=True)
         self.prevent_background_scroll = config.getboolean('Theme', 'prevent_background_scroll', fallback=True)
-        self.use_raw_yomitan_overlay = config.getboolean('Theme', 'use_raw_yomitan_overlay', fallback=False)
 
         self.anki_deck_name = config.get('Anki', 'deck_name', fallback='Default')
         self.anki_model_name = config.get('Anki', 'model_name', fallback='Basic')
@@ -225,8 +223,7 @@ class Config:
             'max_width': str(self.max_width),
             'max_height': str(self.max_height),
             'show_keyboard_shortcuts': str(self.show_keyboard_shortcuts).lower(),
-            'prevent_background_scroll': str(self.prevent_background_scroll).lower(),
-            'use_raw_yomitan_overlay': str(self.use_raw_yomitan_overlay).lower()
+            'prevent_background_scroll': str(self.prevent_background_scroll).lower()
         }
         config['Anki'] = {
             'deck_name': self.anki_deck_name,

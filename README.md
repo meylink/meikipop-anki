@@ -27,10 +27,11 @@ https://github.com/user-attachments/assets/b0720ecc-4904-499f-8baa-f8352e35a824
 5. Run: `meikipop.run.bat` or `python -m src.main`.
 6. Optional: `meikipop.build.bat` to build an exe file, after that you can delete everything except the yomitan-api folder (stored in src).
 
-Notes : 
+Notes:
 - On auto-mode, hold Shift to keep overlay open and cycle through entries.
 - Keybinds only work with Alt, Shift, Ctrl and Mouse buttons (need to be added through config.ini).
-- There's a "Raw Yomitan Overlay" mode, where the styling looks a bit better. Selecting "glossary-raw" for Main Definition sends the same styling to Anki.
+- Custom Yomitan markers are supported in Anki field templates even if they are not listed in the Meikipop dropdown.
+- This includes single glossary markers such as {single-glossary-your-dictionary}.
 
 ## Acknowledgements
 

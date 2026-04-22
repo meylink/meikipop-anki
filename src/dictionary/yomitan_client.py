@@ -259,6 +259,63 @@ class YomitanClient:
 
         return best_value
 
+    def get_term_marker_values(self, term: str, reading: str, markers: List[str]) -> Dict[str, str]:
+        """Return multiple rendered Anki marker values for the best matching term/reading entry."""
+        term = (term or "").strip()
+        reading = (reading or "").strip()
+        markers = [m.strip() for m in markers if isinstance(m, str) and m.strip()]
+
+        if not markers or (not term and not reading):
+            return {}
+
+        query_text = term or reading
+        request_markers = ["expression", "reading", *markers]
+
+        try:
+            data = self.anki_fields(
+                text=query_text,
+                markers=request_markers,
+                max_entries=10,
+                include_media=False,
+                entry_type="term",
+            )
+        except Exception as e:
+            logger.debug(f"Yomitan ankiFields marker request failed ({markers}): {e}")
+            return {}
+
+        fields = data.get("fields", []) if isinstance(data, dict) else []
+        if not isinstance(fields, list) or not fields:
+            return {}
+
+        best_row = None
+        best_score = -1
+        for f in fields:
+            if not isinstance(f, dict):
+                continue
+
+            f_term = str(f.get("expression", "")).strip()
+            f_read = str(f.get("reading", "")).strip()
+
+            score = 0
+            if term and f_term == term:
+                score += 3
+            if reading and f_read == reading:
+                score += 2
+            if term and f_read == term:
+                score += 1
+
+            if score > best_score:
+                best_score = score
+                best_row = f
+
+        if not isinstance(best_row, dict):
+            return {}
+
+        out: Dict[str, str] = {}
+        for marker in markers:
+            out[marker] = str(best_row.get(marker, ""))
+        return out
+
     def _convert_api_entry(self, item: Dict[str, Any], lookup_term: str, index: int) -> Optional[DictionaryEntry]:
         """
         Converts a single API dictionary entry object to DictionaryEntry.

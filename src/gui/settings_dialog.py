@@ -26,7 +26,6 @@ AVAILABLE_SOURCES = [
     "{frequency-harmonic-rank}",
     "{furigana-plain}",
     "{glossary}",
-    "{glossary-raw}",
     "{glossary-brief}",
     "{glossary-first}",
     "{glossary-1st-dict}",
@@ -400,12 +399,6 @@ class SettingsDialog(QDialog):
         self.prevent_bg_scroll_check.toggled.connect(self.preview_settings)
         self.popup_layout.addRow("  Prevent Background Scroll:", self.prevent_bg_scroll_check)
 
-        self.raw_overlay_check = QCheckBox()
-        self.raw_overlay_check.setChecked(getattr(config, 'use_raw_yomitan_overlay', False))
-        self.raw_overlay_check.setToolTip("Render overlay definitions using raw Yomitan structured HTML (closer to export look).")
-        self.raw_overlay_check.toggled.connect(self.preview_settings)
-        self.popup_layout.addRow("  Raw Yomitan Overlay:", self.raw_overlay_check)
-        
         self.tabs.addTab(self.popup_tab, "Popup")
 
 
@@ -527,7 +520,6 @@ class SettingsDialog(QDialog):
             'show_pitch_accent': config.show_pitch_accent,
             'show_keyboard_shortcuts': config.show_keyboard_shortcuts,
             'prevent_background_scroll': config.prevent_background_scroll,
-            'use_raw_yomitan_overlay': getattr(config, 'use_raw_yomitan_overlay', False),
             'anki_url': config.anki_url,
             'anki_deck_name': config.anki_deck_name,
             'anki_model_name': config.anki_model_name,
@@ -725,8 +717,6 @@ class SettingsDialog(QDialog):
         config.anki_show_hover_status = self.anki_hover_status_check.isChecked()
 
         config.prevent_background_scroll = self.prevent_bg_scroll_check.isChecked()
-        config.use_raw_yomitan_overlay = self.raw_overlay_check.isChecked()
-        
         selected_friendly_name = self.popup_position_combo.currentText()
         config.popup_position_mode = self.popup_mode_map.get(selected_friendly_name, "flip_vertically")
         

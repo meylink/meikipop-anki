@@ -63,186 +63,6 @@ def _guard_window_flags() -> Qt.WindowType:
 
     return flags
 
-
-YOMITAN_RAW_FALLBACK_CSS = """
-.yomitan-glossary span.tag,
-.yomitan-glossary span[data-sc-class=\"tag\"] {
-    border-radius: 0.3em;
-    font-size: 0.8em;
-    font-weight: bold;
-    margin-right: 0.5em;
-    padding: 0.2em 0.3em;
-    vertical-align: text-bottom;
-    word-break: keep-all;
-    background-color: rgb(86, 86, 86);
-    color: white;
-}
-
-.yomitan-glossary span.tag + span.tag,
-.yomitan-glossary span[data-sc-class=\"tag\"] + span[data-sc-class=\"tag\"] {
-    background-color: brown;
-}
-
-.yomitan-glossary span[data-sc-content=\"forms-label\"],
-.yomitan-glossary span.tag[title*="spelling and reading variants"] {
-    background-color: rgb(86, 86, 86);
-    color: white;
-}
-
-.yomitan-glossary ul {
-    list-style-type: disc;
-}
-
-.yomitan-glossary div.extra-box,
-.yomitan-glossary div[data-sc-class=\"extra-box\"] {
-    border-radius: 0.4rem;
-    border-style: none none none solid;
-    border-width: 0.22rem;
-    margin-bottom: 0.5rem;
-    margin-top: 0.5rem;
-    padding: 0.5rem;
-    width: fit-content;
-    border-color: var(--text-color, var(--fg, #333));
-    background-color: color-mix(in srgb, var(--text-color, var(--fg, #333)) 5%, transparent);
-}
-
-.yomitan-glossary div.extra-box:has(span[lang=\"en\"]),
-.yomitan-glossary div[data-sc-content=\"xref\"] {
-    border-color: rgb(26, 115, 232);
-    background-color: color-mix(in srgb, rgb(26, 115, 232) 5%, transparent);
-}
-
-.yomitan-glossary div:has(> span[lang=\"ja\"]) {
-    font-size: 1.15em;
-}
-
-.yomitan-glossary div:has(> span[lang=\"en\"]) {
-    font-size: 0.88em;
-}
-
-.yomitan-glossary span[lang=\"en\"] {
-    opacity: 0.95;
-}
-
-.yomitan-glossary span:has(> ruby) {
-    ruby-position: over;
-}
-
-.yomitan-glossary div[data-sc-content=\"attribution\"],
-.yomitan-glossary > ol > li > div:last-child {
-    font-size: 0.7em;
-    text-align: right;
-}
-
-.yomitan-glossary div[data-sc-content=\"forms\"],
-.yomitan-glossary li[data-sc-content=\"forms\"],
-.yomitan-glossary div:has(> span.tag[title*="spelling and reading variants"]) {
-    margin-top: 0.5em;
-}
-
-.yomitan-glossary table {
-    margin-top: 0.2em;
-    table-layout: auto;
-    border-collapse: collapse;
-}
-
-.yomitan-glossary tr {
-    border-width: 1px;
-}
-
-.yomitan-glossary th,
-.yomitan-glossary td {
-    border-style: solid;
-    border-width: 1px;
-    border-color: currentColor;
-    padding: 0.25em;
-    vertical-align: top;
-}
-
-.yomitan-glossary th {
-    font-weight: normal;
-    text-align: center;
-}
-
-.yomitan-glossary td {
-    text-align: center;
-}
-
-.yomitan-glossary td > span {
-    clip-path: circle();
-    display: block;
-    font-weight: bold;
-    padding: 0 0.5em;
-}
-
-.yomitan-glossary td.form-pri > span,
-.yomitan-glossary td[data-sc-class=\"form-pri\"] > span {
-    color: white;
-    background: radial-gradient(green 50%, white 100%);
-}
-
-.yomitan-glossary td.form-pri > span::before,
-.yomitan-glossary td[data-sc-class=\"form-pri\"] > span::before {
-    content: "△";
-}
-
-.yomitan-glossary td.form-irr > span,
-.yomitan-glossary td[data-sc-class=\"form-irr\"] > span {
-    color: white;
-    background: radial-gradient(crimson 50%, white 100%);
-}
-
-.yomitan-glossary td.form-irr > span::before,
-.yomitan-glossary td[data-sc-class=\"form-irr\"] > span::before {
-    content: "✕";
-}
-
-.yomitan-glossary td.form-out > span,
-.yomitan-glossary td[data-sc-class=\"form-out\"] > span {
-    color: white;
-    background: radial-gradient(blue 50%, white 100%);
-}
-
-.yomitan-glossary td.form-out > span::before,
-.yomitan-glossary td[data-sc-class=\"form-out\"] > span::before {
-    content: "古";
-}
-
-.yomitan-glossary td.form-old > span,
-.yomitan-glossary td[data-sc-class=\"form-old\"] > span {
-    color: white;
-    background: radial-gradient(blue 50%, white 100%);
-}
-
-.yomitan-glossary td.form-old > span::before,
-.yomitan-glossary td[data-sc-class=\"form-old\"] > span::before {
-    content: "旧";
-}
-
-.yomitan-glossary td.form-rare > span,
-.yomitan-glossary td[data-sc-class=\"form-rare\"] > span {
-    color: white;
-    background: radial-gradient(purple 50%, white 100%);
-}
-
-.yomitan-glossary td.form-rare > span::before,
-.yomitan-glossary td[data-sc-class=\"form-rare\"] > span::before {
-    content: "▽";
-}
-
-.yomitan-glossary td.form-valid > span,
-.yomitan-glossary td[data-sc-class=\"form-valid\"] > span {
-    color: var(--background-color, var(--canvas, #f8f9fa));
-    background: radial-gradient(var(--text-color, var(--fg, #333)) 50%, white 100%);
-}
-
-.yomitan-glossary td.form-valid > span::before,
-.yomitan-glossary td[data-sc-class=\"form-valid\"] > span::before {
-    content: "◇";
-}
-"""
-
-
 def group_frequency_tags(frequency_tags):
     """Groups frequency tags by dictionary name for popup display.
     Input: {"JPDB: 123", "JPDB: 456", "VN: 789"}
@@ -1400,7 +1220,6 @@ class Popup(QWidget):
         glossary_full = ""
         glossary_first = ""
         glossary_1st_dict = ""
-        glossary_raw = ""
         if glossary_html_parts:
             glossary_full = f'<div style="text-align: left;" class="yomitan-glossary"><ol>{"".join(glossary_html_parts)}</ol></div>'
             # Glossary First: Only the first sense
@@ -1447,34 +1266,6 @@ class Popup(QWidget):
                 
                 if first_dict_parts:
                     glossary_1st_dict = f'<div style="text-align: left;" class="yomitan-glossary"><ol>{"".join(first_dict_parts)}</ol></div>'
-
-        # Raw glossary from Yomitan API structured content, without overlay reformatting.
-        raw_li_items = []
-        for sense in entry.senses:
-            gs = sense.get('glosses', [])
-            if any(g.startswith("PITCH:") for g in gs):
-                continue
-
-            raw_html = sense.get('raw_html', '')
-            if raw_html:
-                source = sense.get('source', '')
-                source_attr = source.replace('"', '&quot;')
-                pos_list = sense.get('pos', [])
-                pos_parts = [p for p in pos_list if p]
-                if source:
-                    pos_parts.append(source)
-                pos_str = f"<i>({', '.join(pos_parts)})</i> " if pos_parts else ""
-                raw_li_items.append(f'<li data-dictionary="{source_attr}">{pos_str}{raw_html}</li>')
-
-        if raw_li_items:
-            glossary_raw = f'<div style="text-align: left;" class="yomitan-glossary"><ol>{"".join(raw_li_items)}</ol></div>'
-
-            # Some Yomitan API payloads do not include per-entry style blocks.
-            # Add a fallback stylesheet so cards render close to Brave/Yomitan.
-            if "<style" not in glossary_raw.lower():
-                glossary_raw += f"<style>{YOMITAN_RAW_FALLBACK_CSS}</style>"
-        else:
-            glossary_raw = glossary_full
         
         # Pitch Accent
         pitch_positions = []
@@ -1711,11 +1502,34 @@ class Popup(QWidget):
         if (word or reading) and config.yomitan_enabled:
             try:
                 yomi_client = YomitanClient(config.yomitan_api_url)
-                pitch_accent_categories = yomi_client.get_term_marker_value(
+                marker_values = yomi_client.get_term_marker_values(
                     word,
                     reading,
-                    "pitch-accent-categories",
+                    [
+                        "pitch-accent-categories",
+                        "glossary",
+                        "glossary-brief",
+                        "glossary-first",
+                        "glossary-first-no-dictionary",
+                    ],
                 )
+                pitch_accent_categories = marker_values.get("pitch-accent-categories", "")
+
+                # Prefer Yomitan-rendered glossary fields for Anki card export.
+                # Fall back to Meikipop-constructed values when API marker is empty.
+                yomitan_glossary = marker_values.get("glossary", "")
+                yomitan_glossary_brief = marker_values.get("glossary-brief", "")
+                yomitan_glossary_first = marker_values.get("glossary-first", "")
+                yomitan_glossary_first_no_dict = marker_values.get("glossary-first-no-dictionary", "")
+
+                if yomitan_glossary:
+                    glossary_full = yomitan_glossary
+                if yomitan_glossary_brief:
+                    glossary_brief = yomitan_glossary_brief
+                if yomitan_glossary_first:
+                    glossary_first = yomitan_glossary_first
+                if yomitan_glossary_first_no_dict:
+                    glossary_1st_dict = yomitan_glossary_first_no_dict
             except Exception as e:
                 logger.debug(f"Failed to fetch Yomitan pitch-accent-categories: {e}")
         
@@ -1724,7 +1538,6 @@ class Popup(QWidget):
             "Reading": reading,
             "Furigana Plain": furigana_plain,
             "Glossary": glossary_full,
-            "Glossary Raw": glossary_raw,
             "Glossary First": glossary_first,
             "Glossary 1st Dict": glossary_1st_dict,
             "Glossary Brief": glossary_brief,
@@ -1782,6 +1595,35 @@ class Popup(QWidget):
              # Slug key: "cloze-prefix"
              slug_map[k.lower().replace(" ", "-")] = str(v)
 
+        # Dynamic Yomitan markers:
+        # Allow custom template tokens like
+        # {single-glossary-jitendexorg-2026-04-04-no-dictionary}
+        # by resolving unknown tokens through Yomitan ankiFields markers.
+        template_sources = [str(v) for v in config.anki_field_map.values() if isinstance(v, str) and "{" in v and "}" in v]
+        unresolved_tokens = set()
+        for source in template_sources:
+            for token in re.findall(r'\{([^}]+)\}', source):
+                token_norm = token.strip()
+                if not token_norm:
+                    continue
+                slug = token_norm.lower().replace(" ", "-")
+                if token_norm in slug_map or slug in slug_map:
+                    continue
+                unresolved_tokens.add(slug)
+
+        yomitan_dynamic_markers = {}
+        if unresolved_tokens and config.yomitan_enabled and (word or reading):
+            try:
+                if yomi_client is None:
+                    yomi_client = YomitanClient(config.yomitan_api_url)
+                yomitan_dynamic_markers = yomi_client.get_term_marker_values(
+                    word,
+                    reading,
+                    sorted(unresolved_tokens),
+                )
+            except Exception as e:
+                logger.debug(f"Failed to fetch dynamic Yomitan markers: {e}")
+
         # Fields Population Loop
         fields = {}
         has_audio_field = False
@@ -1796,7 +1638,13 @@ class Popup(QWidget):
                        key = m.group(1)
                        # Try slug (cloze-prefix), then exact key
                        s = key.lower().replace(" ", "-")
-                       return slug_map.get(s, slug_map.get(key, m.group(0)))
+                       if s in slug_map:
+                           return slug_map[s]
+                       if key in slug_map:
+                           return slug_map[key]
+                       if s in yomitan_dynamic_markers:
+                           return yomitan_dynamic_markers.get(s, "")
+                       return m.group(0)
                   
                   try:
                       fields[field] = re.sub(r'\{([^}]+)\}', replace_match, str(source))
@@ -2487,9 +2335,11 @@ class Popup(QWidget):
                 return ""
 
             raw_html_block = f'<div style="text-align: left;" class="yomitan-glossary"><ol>{"".join(raw_li_items)}</ol></div>'
-            if "<style" not in raw_html_block.lower():
-                raw_html_block += f"<style>{YOMITAN_RAW_FALLBACK_CSS}</style>"
             return raw_html_block
+
+        def is_jitendex_source(source_name: str) -> bool:
+            source_lower = (source_name or '').lower()
+            return 'jitendex' in source_lower
         
         
         for i, (global_idx, entry) in enumerate(entries_to_render):
@@ -2637,47 +2487,49 @@ class Popup(QWidget):
                     f'</tr>'
                     f'</table>'
                 )
-            if getattr(config, 'use_raw_yomitan_overlay', False):
-                raw_overlay_html = build_raw_overlay_html(entry, regular_senses)
-                if raw_overlay_html:
-                    raw_calc_text = re.sub(r'<[^>]+>', ' ', raw_overlay_html)
-                    raw_calc_text = re.sub(r'\s+', ' ', raw_calc_text).strip()
-                    if raw_calc_text:
-                        def_ratio = len(raw_calc_text) / self.def_chars_per_line
-                        max_ratio = max(max_ratio, def_ratio)
-
-                    definitions_html_final = (
-                        f'<div style="font-size:{config.font_size_definitions}px; '
-                        f'color:{config.color_definitions}; margin-top: -4px;">{raw_overlay_html}</div>'
-                    )
-                    all_html_parts.append(f"{header_html}{definitions_html_final}")
-                    continue
-
-            # Group senses by source (preserves order)
-            from itertools import groupby
-            
+            # Group senses by source while preserving original Yomitan order.
             def get_source(s):
                 return s.get('source', 'General')
                 
             def_text_parts_calc = []
             def_text_parts_html = []
-            
-            # Sort senses by source first to ensure groupby works correctly
-            # (groupby only groups consecutive items, so we need them sorted)
-            sorted_senses = sorted(regular_senses, key=get_source)
-            
-            # Now groupby will properly group all senses from the same source together
-            for source, group in groupby(sorted_senses, key=get_source):
-                group_list = list(group)
+
+            source_groups = {}
+            for sense in regular_senses:
+                source = get_source(sense)
+                if source not in source_groups:
+                    source_groups[source] = []
+                source_groups[source].append(sense)
+
+            total_source_groups = len(source_groups)
+
+            for source, group_list in source_groups.items():
                 if not group_list: continue
                 
                 # Add Source Header
-                if len(regular_senses) > len(group_list): # Only show header if there are multiple sources or mixing occurred? 
+                if total_source_groups > 1:
                     # Actually, always useful to know source if we are supporting yomichan dicts.
                     # But for single dictionary setup, might be noisy. 
                     # Let's show it if source is not "General" or if we have multiple groups.
                     source_header_html = f"<div style='color: #888888; font-size: {config.font_size_definitions - 2}px; margin-top: 6px; margin-bottom: 2px; font-weight: bold;'>{source}</div>"
                     def_text_parts_html.append(source_header_html)
+
+                # Render Jitendex using styled raw HTML, but keep it in source order.
+                if is_jitendex_source(source):
+                    jitendex_raw_html = build_raw_overlay_html(entry, group_list)
+                    if jitendex_raw_html:
+                        jit_calc_text = re.sub(r'<[^>]+>', ' ', jitendex_raw_html)
+                        jit_calc_text = re.sub(r'\s+', ' ', jit_calc_text).strip()
+                        if jit_calc_text:
+                            def_ratio = len(jit_calc_text) / self.def_chars_per_line
+                            max_ratio = max(max_ratio, def_ratio)
+                            def_text_parts_calc.append(jit_calc_text)
+
+                        def_text_parts_html.append(
+                            f'<div style="font-size:{config.font_size_definitions}px; '
+                            f'color:{config.color_definitions}; margin-top: -4px;">{jitendex_raw_html}</div>'
+                        )
+                    continue
                 
                 for idx, sense in enumerate(group_list):
                     original_glosses = sense.get('glosses', [])
@@ -2736,6 +2588,7 @@ class Popup(QWidget):
                     max_ratio = max(max_ratio, def_ratio)
 
             definitions_html_final = f'<div style="font-size:{config.font_size_definitions}px; color:{config.color_definitions}; margin-top: -4px;">{full_def_text_html}</div>'
+
             all_html_parts.append(f"{header_html}{definitions_html_final}")
 
         full_html = "".join(all_html_parts)

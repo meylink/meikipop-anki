@@ -13,9 +13,17 @@ ALLOWED_ATTRS = {
     'src', 'style', 'target', 'title', 'width', 'height'
 }
 
-def escape_html(text: str) -> str:
-    return html.escape(text, quote=True)
+# Private-use and object replacement glyphs frequently render as empty squares
+# in Qt rich text when a dictionary expects custom icon fonts/media support.
+PRIVATE_USE_RE = re.compile(
+    r"[\uE000-\uF8FF\uFFFC\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]"
+)
 
+MEDIA_TAGS = {'img', 'svg', 'audio', 'video', 'source', 'object', 'iframe', 'canvas'}
+
+def escape_html(text: str) -> str:
+    safe_text = PRIVATE_USE_RE.sub('', text)
+    return html.escape(safe_text, quote=True)
 
 def _camel_to_kebab(name: str) -> str:
     return re.sub(r'(?<!^)(?=[A-Z])', '-', name).lower()
@@ -139,6 +147,11 @@ def render_node(node: Any) -> str:
             return inner_html
 
         tag = str(tag).lower().strip()
+        if tag in MEDIA_TAGS:
+            # Drop unsupported media nodes entirely to avoid noisy placeholders
+            # like "[img omitted]" in the overlay.
+            return ""
+
         if tag not in ALLOWED_TAGS:
             # Fallback for unknown tags: return content
             return inner_html
