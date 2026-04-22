@@ -423,6 +423,23 @@ class YomitanClient:
                      for style_key in ('style', 'styles', 'css', 'stylesheet'):
                          if style_key in de:
                              add_style_block(de.get(style_key))
+                elif isinstance(de, dict) and de.get('type') in ('image', 'audio', 'video', 'media'):
+                    # Avoid dumping raw media object dicts into gloss text.
+                    # Keep an optional compact marker with description when present.
+                    media_type = str(de.get('type', '')).strip().lower()
+                    description = str(de.get('description', '')).strip()
+                    if media_type == 'image':
+                        marker = '[Image]'
+                    elif media_type == 'audio':
+                        marker = '[Audio]'
+                    elif media_type == 'video':
+                        marker = '[Video]'
+                    else:
+                        marker = '[Media]'
+
+                    media_text = f"{marker} {description}".strip() if description else marker
+                    glosses.append(media_text)
+                    raw_html_parts.append(html.escape(media_text))
                 elif isinstance(de, dict) and de.get('type') in ('style', 'stylesheet', 'css'):
                     add_style_block(de.get('content') or de.get('style') or de.get('css'))
                 else:
