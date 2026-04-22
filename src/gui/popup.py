@@ -2362,7 +2362,7 @@ class Popup(QWidget):
                 # Check if this is a pitch dictionary (heuristic: contains "Pitch" or "Accent" or "Kanjium" or "Otogen")
                 # You might need to adjust these keywords based on actual dictionary names used.
                 # Made case-insensitive and added common ones like NHK and Japanese "アクセント"
-                keywords = ["pitch", "accent", "kanjium", "otogen", "nhk", "shinmeikai", "アクセント", "大辞林"]
+                keywords = ["pitch", "accent", "kanjium", "otogen", "nhk", "shinmeikai", "アクセント"]
                 is_pitch_source = any(k in source.lower() for k in keywords)
                 
                 if is_pitch_source:
