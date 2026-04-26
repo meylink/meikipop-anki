@@ -3,6 +3,7 @@ import requests
 import logging
 import html
 import re
+import unicodedata
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from .customdict import DictionaryEntry
@@ -104,22 +105,171 @@ class YomitanClient:
 
     def anki_fields(self, text: str, markers: List[str], max_entries: int = 10, include_media: bool = False, entry_type: str = "term") -> Dict[str, Any]:
         """Render Yomitan Anki fields and optional media payload for the given text."""
-        response = requests.post(
-            f"{self.api_url}/ankiFields",
-            json={
-                "text": text,
-                "type": entry_type,
-                "markers": markers,
-                "maxEntries": max_entries,
-                "includeMedia": include_media,
-            },
-            timeout=3,
-        )
-        response.raise_for_status()
-        data = response.json()
-        if not isinstance(data, dict):
-            return {}
-        return data
+        request_markers = [m for m in markers if isinstance(m, str) and m.strip()]
+
+        while True:
+            response = requests.post(
+                f"{self.api_url}/ankiFields",
+                json={
+                    "text": text,
+                    "type": entry_type,
+                    "markers": request_markers,
+                    "maxEntries": max_entries,
+                    "includeMedia": include_media,
+                },
+                timeout=5,
+            )
+
+            try:
+                response.raise_for_status()
+            except requests.HTTPError:
+                unknown_marker = self._extract_unknown_marker_from_error(response.text)
+                if unknown_marker and unknown_marker in request_markers and len(request_markers) > 1:
+                    logger.debug(f"Yomitan marker '{unknown_marker}' unsupported by API; retrying without it.")
+                    request_markers = [m for m in request_markers if m != unknown_marker]
+                    continue
+                raise
+
+            data = response.json()
+            if not isinstance(data, dict):
+                return {}
+            return data
+
+    @staticmethod
+    def _extract_unknown_marker_from_error(error_text: str) -> str:
+        text = str(error_text or "")
+        match = re.search(r"partial\s+([^\s]+)\s+could\s+not\s+be\s+found", text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return ""
+
+    @staticmethod
+    def _normalize_match_text(value: str) -> str:
+        value = unicodedata.normalize('NFKC', value or "")
+        value = value.strip().lower()
+        return re.sub(r'\s+', '', value)
+
+    @staticmethod
+    def extract_audio_filename(audio_marker: str) -> str:
+        marker = str(audio_marker or "")
+        match = re.search(r"\[sound:([^\]]+)\]", marker)
+        if not match:
+            return ""
+        return match.group(1).strip()
+
+    def _select_row(self, fields: List[Dict[str, Any]], term: str, reading: str) -> Optional[Dict[str, Any]]:
+        if not isinstance(fields, list) or not fields:
+            return None
+
+        term = (term or "").strip()
+        reading = (reading or "").strip()
+        n_term = self._normalize_match_text(term)
+        n_read = self._normalize_match_text(reading)
+
+        if term and reading:
+            for row in fields:
+                if not isinstance(row, dict):
+                    continue
+                if str(row.get("expression", "")).strip() == term and str(row.get("reading", "")).strip() == reading:
+                    return row
+            for row in fields:
+                if not isinstance(row, dict):
+                    continue
+                if self._normalize_match_text(str(row.get("expression", ""))) == n_term and self._normalize_match_text(str(row.get("reading", ""))) == n_read:
+                    return row
+
+        if reading:
+            for row in fields:
+                if not isinstance(row, dict):
+                    continue
+                if str(row.get("reading", "")).strip() == reading:
+                    return row
+            for row in fields:
+                if not isinstance(row, dict):
+                    continue
+                if self._normalize_match_text(str(row.get("reading", ""))) == n_read:
+                    return row
+
+        if term:
+            for row in fields:
+                if not isinstance(row, dict):
+                    continue
+                if str(row.get("expression", "")).strip() == term:
+                    return row
+            for row in fields:
+                if not isinstance(row, dict):
+                    continue
+                if self._normalize_match_text(str(row.get("expression", ""))) == n_term:
+                    return row
+
+        return fields[0] if isinstance(fields[0], dict) else None
+
+    def get_term_marker_bundle(self, term: str, reading: str, markers: List[str], include_media: bool = False) -> Dict[str, Any]:
+        """Fetch marker values using expression query and reading-based row selection"""
+        term = (term or "").strip()
+        reading = (reading or "").strip()
+        markers = [m.strip() for m in markers if isinstance(m, str) and m.strip()]
+        if not markers or (not term and not reading):
+            return {"values": {}, "audioFilename": "", "audioContent": "", "audioMediaType": ""}
+
+        query_text = term or reading
+        request_markers = ["expression", "reading", *markers]
+
+        try:
+            data = self.anki_fields(
+                text=query_text,
+                markers=request_markers,
+                max_entries=10 if reading else 1,
+                include_media=include_media,
+                entry_type="term",
+            )
+        except Exception as e:
+            logger.debug(f"Yomitan ankiFields bundle request failed ({query_text}): {e}")
+            return {"values": {}, "audioFilename": "", "audioContent": "", "audioMediaType": ""}
+
+        fields = data.get("fields", []) if isinstance(data, dict) else []
+        if not isinstance(fields, list) or not fields:
+            return {"values": {}, "audioFilename": "", "audioContent": "", "audioMediaType": ""}
+
+        row = self._select_row(fields, term, reading)
+        if not isinstance(row, dict):
+            return {"values": {}, "audioFilename": "", "audioContent": "", "audioMediaType": ""}
+
+        values: Dict[str, str] = {}
+        for marker in markers:
+            value = str(row.get(marker, ""))
+            if not value:
+                # Prefer same-reading fallback rows first.
+                for f in fields:
+                    if not isinstance(f, dict):
+                        continue
+                    if reading and self._normalize_match_text(str(f.get("reading", ""))) != self._normalize_match_text(reading):
+                        continue
+                    candidate = str(f.get(marker, ""))
+                    if candidate:
+                        value = candidate
+                        break
+            values[marker] = value
+
+        audio_filename = ""
+        audio_content = ""
+        audio_media_type = ""
+        if include_media:
+            marker_audio = str(values.get("audio", "") or row.get("audio", ""))
+            audio_filename = self.extract_audio_filename(marker_audio)
+            audio_media = data.get("audioMedia", []) if isinstance(data, dict) else []
+            if audio_filename and isinstance(audio_media, list):
+                item = next((m for m in audio_media if isinstance(m, dict) and str(m.get("ankiFilename", "")).strip() == audio_filename), None)
+                if isinstance(item, dict):
+                    audio_content = str(item.get("content", ""))
+                    audio_media_type = str(item.get("mediaType", ""))
+
+        return {
+            "values": values,
+            "audioFilename": audio_filename,
+            "audioContent": audio_content,
+            "audioMediaType": audio_media_type,
+        }
 
     def get_audio_media(self, term: str, reading: str = "") -> Optional[Dict[str, str]]:
         """
@@ -135,77 +285,19 @@ class YomitanClient:
         if not term and not reading:
             return None
 
-        query_text = term or reading
-        try:
-            data = self.anki_fields(
-                text=query_text,
-                markers=["expression", "reading", "audio"],
-                max_entries=10,
-                include_media=True,
-                entry_type="term",
-            )
-        except Exception as e:
-            logger.debug(f"Yomitan ankiFields audio request failed: {e}")
-            return None
+        bundle = self.get_term_marker_bundle(term, reading, ["audio"], include_media=True)
+        values = bundle.get("values", {}) if isinstance(bundle, dict) else {}
 
-        fields = data.get("fields", []) if isinstance(data, dict) else []
-        audio_media = data.get("audioMedia", []) if isinstance(data, dict) else []
-        if not isinstance(fields, list) or not isinstance(audio_media, list) or not audio_media:
-            return None
-
-        target_filename = ""
-        if fields:
-            scored = []
-            for f in fields:
-                if not isinstance(f, dict):
-                    continue
-
-                audio_marker = str(f.get("audio", ""))
-                match = re.search(r"\[sound:([^\]]+)\]", audio_marker)
-                if not match:
-                    continue
-
-                fname = match.group(1).strip()
-                f_term = str(f.get("expression", "")).strip()
-                f_read = str(f.get("reading", "")).strip()
-
-                score = 0
-                if term and f_term == term:
-                    score += 3
-                if reading and f_read == reading:
-                    score += 2
-                if term and f_read == term:
-                    score += 1
-
-                scored.append((score, fname))
-
-            if scored:
-                scored.sort(key=lambda x: x[0], reverse=True)
-                target_filename = scored[0][1]
-
-        target_item = None
-        if target_filename:
-            target_item = next((m for m in audio_media if isinstance(m, dict) and m.get("ankiFilename") == target_filename), None)
-
-        if target_item is None:
-            target_item = next((m for m in audio_media if isinstance(m, dict)), None)
-            if target_item and not target_filename:
-                target_filename = str(target_item.get("ankiFilename", ""))
-
-        if not target_item:
-            return None
-
-        content = str(target_item.get("content", ""))
-        media_type = str(target_item.get("mediaType", ""))
-        filename = target_filename or str(target_item.get("ankiFilename", ""))
-
-        if not filename or not content:
+        filename = str(bundle.get("audioFilename", "")) if isinstance(bundle, dict) else ""
+        if not filename:
+            filename = self.extract_audio_filename(str(values.get("audio", "")))
+        if not filename:
             return None
 
         return {
             "filename": filename,
-            "content": content,
-            "mediaType": media_type,
+            "content": str(bundle.get("audioContent", "")) if isinstance(bundle, dict) else "",
+            "mediaType": str(bundle.get("audioMediaType", "")) if isinstance(bundle, dict) else "",
         }
 
     def get_term_marker_value(self, term: str, reading: str, marker: str) -> str:
@@ -216,105 +308,13 @@ class YomitanClient:
         if not marker or (not term and not reading):
             return ""
 
-        query_text = term or reading
-        try:
-            data = self.anki_fields(
-                text=query_text,
-                markers=["expression", "reading", marker],
-                max_entries=10,
-                include_media=False,
-                entry_type="term",
-            )
-        except Exception as e:
-            logger.debug(f"Yomitan ankiFields marker request failed ({marker}): {e}")
-            return ""
-
-        fields = data.get("fields", []) if isinstance(data, dict) else []
-        if not isinstance(fields, list) or not fields:
-            return ""
-
-        best_value = ""
-        best_score = -1
-        for f in fields:
-            if not isinstance(f, dict):
-                continue
-            value = str(f.get(marker, ""))
-            if not value:
-                continue
-
-            f_term = str(f.get("expression", "")).strip()
-            f_read = str(f.get("reading", "")).strip()
-
-            score = 0
-            if term and f_term == term:
-                score += 3
-            if reading and f_read == reading:
-                score += 2
-            if term and f_read == term:
-                score += 1
-
-            if score > best_score:
-                best_score = score
-                best_value = value
-
-        return best_value
+        values = self.get_term_marker_values(term, reading, [marker])
+        return str(values.get(marker, ""))
 
     def get_term_marker_values(self, term: str, reading: str, markers: List[str]) -> Dict[str, str]:
         """Return multiple rendered Anki marker values for the best matching term/reading entry."""
-        term = (term or "").strip()
-        reading = (reading or "").strip()
-        markers = [m.strip() for m in markers if isinstance(m, str) and m.strip()]
-
-        if not markers or (not term and not reading):
-            return {}
-
-        query_text = term or reading
-        request_markers = ["expression", "reading", *markers]
-
-        try:
-            data = self.anki_fields(
-                text=query_text,
-                markers=request_markers,
-                max_entries=10,
-                include_media=False,
-                entry_type="term",
-            )
-        except Exception as e:
-            logger.debug(f"Yomitan ankiFields marker request failed ({markers}): {e}")
-            return {}
-
-        fields = data.get("fields", []) if isinstance(data, dict) else []
-        if not isinstance(fields, list) or not fields:
-            return {}
-
-        best_row = None
-        best_score = -1
-        for f in fields:
-            if not isinstance(f, dict):
-                continue
-
-            f_term = str(f.get("expression", "")).strip()
-            f_read = str(f.get("reading", "")).strip()
-
-            score = 0
-            if term and f_term == term:
-                score += 3
-            if reading and f_read == reading:
-                score += 2
-            if term and f_read == term:
-                score += 1
-
-            if score > best_score:
-                best_score = score
-                best_row = f
-
-        if not isinstance(best_row, dict):
-            return {}
-
-        out: Dict[str, str] = {}
-        for marker in markers:
-            out[marker] = str(best_row.get(marker, ""))
-        return out
+        bundle = self.get_term_marker_bundle(term, reading, markers, include_media=False)
+        return bundle.get("values", {}) if isinstance(bundle, dict) else {}
 
     def _convert_api_entry(self, item: Dict[str, Any], lookup_term: str, index: int) -> Optional[DictionaryEntry]:
         """

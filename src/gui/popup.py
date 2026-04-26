@@ -923,8 +923,8 @@ class Popup(QWidget):
         entry = entries[selected_index]
         
         # Prepare data
-        word = entry.written_form or ""
-        reading = entry.reading or ""
+        word = (entry.written_form or entry.reading or "").strip()
+        reading = (entry.reading or "").strip()
         meanings = []
         import re
         filter_pattern = re.compile(r'^\s*(?:\d+|[①-⑳])')
@@ -1497,30 +1497,62 @@ class Popup(QWidget):
                 + "</ul>"
             )
 
+        # Parse template markers early so we can request all needed values in one call.
+        template_sources = [str(v) for v in config.anki_field_map.values() if isinstance(v, str) and "{" in v and "}" in v]
+        template_tokens = set()
+        for source in template_sources:
+            for token in re.findall(r'\{([^}]+)\}', source):
+                token_norm = token.strip().lower().replace(" ", "-")
+                if token_norm:
+                    template_tokens.add(token_norm)
+
+        local_template_tokens = {
+            "audio", "cloze-body", "cloze-prefix", "cloze-suffix", "document-title",
+            "expression", "frequencies", "frequency-average-rank", "frequency-harmonic-rank",
+            "furigana-plain", "glossary", "glossary-brief", "glossary-first", "glossary-1st-dict",
+            "picture", "pitch-accent-categories", "pitch-accent-graphs", "pitch-accent-positions",
+            "reading", "sentence", "tags"
+        }
+        unresolved_tokens = sorted(t for t in template_tokens if t not in local_template_tokens)
+
         yomi_client = None
         pitch_accent_categories = ""
+        yomitan_dynamic_markers = {}
+        audio_filename = ""
+        audio_media_base64 = ""
+        yomitan_audio_marker = ""
         if (word or reading) and config.yomitan_enabled:
             try:
                 yomi_client = YomitanClient(config.yomitan_api_url)
-                marker_values = yomi_client.get_term_marker_values(
+                requested_markers = [
+                    "expression",
+                    "reading",
+                    "audio",
+                    "pitch-accent-categories",
+                    "glossary",
+                    "glossary-brief",
+                    "glossary-first",
+                    "glossary-first-no-dictionary",
+                    *unresolved_tokens,
+                ]
+                marker_bundle = yomi_client.get_term_marker_bundle(
                     word,
                     reading,
-                    [
-                        "pitch-accent-categories",
-                        "glossary",
-                        "glossary-brief",
-                        "glossary-first",
-                        "glossary-first-no-dictionary",
-                    ],
+                    requested_markers,
+                    include_media=True,
                 )
-                pitch_accent_categories = marker_values.get("pitch-accent-categories", "")
+                marker_values = marker_bundle.get("values", {}) if isinstance(marker_bundle, dict) else {}
 
-                # Prefer Yomitan-rendered glossary fields for Anki card export.
-                # Fall back to Meikipop-constructed values when API marker is empty.
+                pitch_accent_categories = marker_values.get("pitch-accent-categories", "")
                 yomitan_glossary = marker_values.get("glossary", "")
                 yomitan_glossary_brief = marker_values.get("glossary-brief", "")
                 yomitan_glossary_first = marker_values.get("glossary-first", "")
                 yomitan_glossary_first_no_dict = marker_values.get("glossary-first-no-dictionary", "")
+                yomitan_audio_marker = marker_values.get("audio", "")
+
+                yomitan_dynamic_markers = {k: marker_values.get(k, "") for k in unresolved_tokens}
+                audio_filename = str(marker_bundle.get("audioFilename", "")) if isinstance(marker_bundle, dict) else ""
+                audio_media_base64 = str(marker_bundle.get("audioContent", "")) if isinstance(marker_bundle, dict) else ""
 
                 if yomitan_glossary:
                     glossary_full = yomitan_glossary
@@ -1531,7 +1563,7 @@ class Popup(QWidget):
                 if yomitan_glossary_first_no_dict:
                     glossary_1st_dict = yomitan_glossary_first_no_dict
             except Exception as e:
-                logger.debug(f"Failed to fetch Yomitan pitch-accent-categories: {e}")
+                logger.debug(f"Failed to fetch Yomitan marker bundle: {e}")
         
         data_sources = {
             "Expression": word,
@@ -1557,6 +1589,11 @@ class Popup(QWidget):
             "Document Title": context.get("document_title", "")
         }
 
+        if yomitan_audio_marker:
+            data_sources["Audio"] = yomitan_audio_marker
+        elif audio_filename:
+            data_sources["Audio"] = f"[sound:{audio_filename}]"
+
 
         # Build Fields
         # ------------
@@ -1564,24 +1601,7 @@ class Popup(QWidget):
         # -------------------
         # Pre-calculate these so they can be treated as standard fields in templates
         
-        audio_filename = ""
-        audio_media_base64 = ""
-        
-        if word or reading:
-             # Prefer Yomitan-provided audio for the selected entry.
-             try:
-                 if config.yomitan_enabled:
-                     if yomi_client is None:
-                         yomi_client = YomitanClient(config.yomitan_api_url)
-                     audio_info = yomi_client.get_audio_media(word, reading)
-                     if audio_info:
-                         audio_filename = audio_info.get("filename", "")
-                         audio_media_base64 = audio_info.get("content", "")
-             except Exception as e:
-                 logger.debug(f"Failed to fetch Yomitan audio: {e}")
-
-             if audio_filename:
-                 data_sources["Audio"] = f"[sound:{audio_filename}]"
+        # Audio fields are prefilled from the marker bundle call above.
         
         # Screenshot Logic for Picture field
         if screenshot_field:
@@ -1595,34 +1615,7 @@ class Popup(QWidget):
              # Slug key: "cloze-prefix"
              slug_map[k.lower().replace(" ", "-")] = str(v)
 
-        # Dynamic Yomitan markers:
-        # Allow custom template tokens like
-        # {single-glossary-jitendexorg-2026-04-04-no-dictionary}
-        # by resolving unknown tokens through Yomitan ankiFields markers.
-        template_sources = [str(v) for v in config.anki_field_map.values() if isinstance(v, str) and "{" in v and "}" in v]
-        unresolved_tokens = set()
-        for source in template_sources:
-            for token in re.findall(r'\{([^}]+)\}', source):
-                token_norm = token.strip()
-                if not token_norm:
-                    continue
-                slug = token_norm.lower().replace(" ", "-")
-                if token_norm in slug_map or slug in slug_map:
-                    continue
-                unresolved_tokens.add(slug)
-
-        yomitan_dynamic_markers = {}
-        if unresolved_tokens and config.yomitan_enabled and (word or reading):
-            try:
-                if yomi_client is None:
-                    yomi_client = YomitanClient(config.yomitan_api_url)
-                yomitan_dynamic_markers = yomi_client.get_term_marker_values(
-                    word,
-                    reading,
-                    sorted(unresolved_tokens),
-                )
-            except Exception as e:
-                logger.debug(f"Failed to fetch dynamic Yomitan markers: {e}")
+        # Dynamic markers are prefetched via the bundle call.
 
         # Fields Population Loop
         fields = {}
@@ -1643,8 +1636,16 @@ class Popup(QWidget):
                        if key in slug_map:
                            return slug_map[key]
                        if s in yomitan_dynamic_markers:
-                           return yomitan_dynamic_markers.get(s, "")
-                       return m.group(0)
+                           value = yomitan_dynamic_markers.get(s, "")
+                           if value:
+                               return value
+
+                       if s.startswith("single-glossary-") and s.endswith("-no-dictionary"):
+                           return str(data_sources.get("Glossary 1st Dict", ""))
+                       if s.startswith("single-glossary-"):
+                           return str(data_sources.get("Glossary First", ""))
+
+                       return ""
                   
                   try:
                       fields[field] = re.sub(r'\{([^}]+)\}', replace_match, str(source))
