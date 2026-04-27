@@ -746,6 +746,11 @@ class Popup(QWidget):
             # Reuse last manual crop if user selects then presses Alt+A
             crop_rect = self.last_manual_crop_rect
         # else: screenshot disabled, crop_rect stays None
+
+        # Region selection is finished; keep suppression for capture only, not the full add flow.
+        if config.anki_enable_screenshot:
+            self._suppress_popup_for_anki_screenshot = False
+            self._suppress_popup_until = 0.0
         
         # Show loading bar (indefinite)
         # If already in Anki, run once (quick). If processing (adding), run twice (longer feedback).
@@ -962,6 +967,8 @@ class Popup(QWidget):
 
         if config.anki_enable_screenshot and effective_manual_crop_rect and self.screen_manager is not None:
             try:
+                self._suppress_popup_for_anki_screenshot = True
+                self._suppress_popup_until = time.perf_counter() + 2.0
                 with self.shared_state.screen_lock:
                     full_screenshot, full_monitor = self.screen_manager.take_full_screenshot()
                 screenshot = full_screenshot
@@ -972,8 +979,12 @@ class Popup(QWidget):
                     full_monitor.get("height", 0),
                 )
                 logger.debug(f"Using full desktop screenshot for Anki crop with geometry {screenshot_geometry}")
+                self._suppress_popup_for_anki_screenshot = False
+                self._suppress_popup_until = 0.0
             except Exception as e:
                 logger.warning(f"Failed to capture full desktop screenshot for Anki crop: {e}")
+                self._suppress_popup_for_anki_screenshot = False
+                self._suppress_popup_until = 0.0
         
         if config.anki_enable_screenshot and screenshot:
             from PIL import Image
@@ -1057,6 +1068,11 @@ class Popup(QWidget):
             except Exception as e:
                 logger.warning(f"Failed to store screenshot media '{screenshot_filename}': {e}")
                 screenshot_field = ""
+
+        # Screenshot capture/crop is complete; allow popup to resume while note export continues.
+        if config.anki_enable_screenshot and self._suppress_popup_for_anki_screenshot:
+            self._suppress_popup_for_anki_screenshot = False
+            self._suppress_popup_until = 0.0
 
         # Prepare Data Sources
         # --------------------
@@ -1514,6 +1530,10 @@ class Popup(QWidget):
             "reading", "sentence", "tags"
         }
         unresolved_tokens = sorted(t for t in template_tokens if t not in local_template_tokens)
+        needs_audio = any(
+            (isinstance(src, str) and "{audio}" in src.lower()) or src == "Audio"
+            for src in config.anki_field_map.values()
+        )
 
         yomi_client = None
         pitch_accent_categories = ""
@@ -1539,7 +1559,7 @@ class Popup(QWidget):
                     word,
                     reading,
                     requested_markers,
-                    include_media=True,
+                    include_media=needs_audio,
                 )
                 marker_values = marker_bundle.get("values", {}) if isinstance(marker_bundle, dict) else {}
 
@@ -1553,6 +1573,16 @@ class Popup(QWidget):
                 yomitan_dynamic_markers = {k: marker_values.get(k, "") for k in unresolved_tokens}
                 audio_filename = str(marker_bundle.get("audioFilename", "")) if isinstance(marker_bundle, dict) else ""
                 audio_media_base64 = str(marker_bundle.get("audioContent", "")) if isinstance(marker_bundle, dict) else ""
+                if not yomitan_audio_marker and audio_filename:
+                    yomitan_audio_marker = f"[sound:{audio_filename}]"
+
+                if needs_audio and not yomitan_audio_marker and not audio_filename:
+                    audio_info = yomi_client.get_audio_media(word, reading)
+                    if audio_info:
+                        audio_filename = str(audio_info.get("filename", ""))
+                        audio_media_base64 = str(audio_info.get("content", ""))
+                        if audio_filename:
+                            yomitan_audio_marker = f"[sound:{audio_filename}]"
 
                 if yomitan_glossary:
                     glossary_full = yomitan_glossary
@@ -1639,6 +1669,14 @@ class Popup(QWidget):
                            value = yomitan_dynamic_markers.get(s, "")
                            if value:
                                return value
+
+                       if config.yomitan_enabled and (word or reading) and yomi_client is not None:
+                           try:
+                               value = yomi_client.get_term_marker_value(word, reading, s)
+                               if value:
+                                   return value
+                           except Exception:
+                               pass
 
                        if s.startswith("single-glossary-") and s.endswith("-no-dictionary"):
                            return str(data_sources.get("Glossary 1st Dict", ""))

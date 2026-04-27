@@ -34,7 +34,7 @@ class YomitanClient:
             response = requests.post(
                 f"{self.api_url}/termEntries", 
                 json={"term": term}, 
-                timeout=2
+                timeout=4
             )
             
             if response.status_code != 200:
@@ -106,19 +106,27 @@ class YomitanClient:
     def anki_fields(self, text: str, markers: List[str], max_entries: int = 10, include_media: bool = False, entry_type: str = "term") -> Dict[str, Any]:
         """Render Yomitan Anki fields and optional media payload for the given text."""
         request_markers = [m for m in markers if isinstance(m, str) and m.strip()]
+        timeout_retries = 1
 
         while True:
-            response = requests.post(
-                f"{self.api_url}/ankiFields",
-                json={
-                    "text": text,
-                    "type": entry_type,
-                    "markers": request_markers,
-                    "maxEntries": max_entries,
-                    "includeMedia": include_media,
-                },
-                timeout=5,
-            )
+            try:
+                response = requests.post(
+                    f"{self.api_url}/ankiFields",
+                    json={
+                        "text": text,
+                        "type": entry_type,
+                        "markers": request_markers,
+                        "maxEntries": max_entries,
+                        "includeMedia": include_media,
+                    },
+                    timeout=5,
+                )
+            except requests.Timeout:
+                if timeout_retries > 0:
+                    timeout_retries -= 1
+                    logger.debug(f"Yomitan ankiFields timeout for '{text}', retrying once.")
+                    continue
+                raise
 
             try:
                 response.raise_for_status()
